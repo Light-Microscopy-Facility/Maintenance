@@ -1,0 +1,181 @@
+/*
+ * IluminationProfiles.ijm
+ * ______________________________________________Description________________________________________________
+ * A macro to evaluate the homogeneity of the illumination.
+ It smoothes the picture and save it in a nice colour map.
+ It create the line profiles of the 2 diagonals, save them as png, and for each calculate the value of the coefficient of variance.
+ All the CVs are saved in an Excel table.
+ * _________________________________________________________________________________________________________
+ * 
+ * Authors:	Aurora Panzera, Pablo Ingino, Light Microscopy Facility, MPI for Developmental Biology
+ * 
+*/
+
+
+// Selecting source and destination folders (destination has to be different):
+input = getDirectory("Choose Source Directory");
+output = getDirectory("Choose Destination Directory");
+list = getFileList(input);
+
+setBatchMode(true);
+
+for (i=0; i<list.length; i++) {
+	showProgress(i+1, list.length);
+	run("Bio-Formats Importer", "open=" + input + list[i] + " autoscale color_mode=Default view=Hyperstack stack_order=XYCZT");
+	//open(input+list[i]);
+	selectWindow(list[i]);
+	
+getDimensions(width, height, channels, slices, frames);
+	if (channels==3) {
+										// calls apropriate function depending on the datasets
+		setBatchMode(false);
+		IlluminationProfiles_RGB();
+	} else {
+		IlluminationProfiles();
+	}
+}
+
+// Saving Files etc:
+date = "yyyymmdd";              
+Dialog.create("Informations");
+Dialog.addString("Input date of measure:", date);
+Dialog.show();
+date = Dialog.getString();
+selectWindow("ListaCV");
+saveAs("Results", output + date + "_CVsTable.xls");
+close();
+run("Close All");
+
+
+
+// Functions for the different filetypes:
+
+function IlluminationProfiles() {
+							//For datasets containing a single greyscale image
+	run("Median...", "radius=5");							
+	name = replace(list[i],"\\..*","");						// deletes the file extension string in filename
+	
+	makeLine(1, getHeight(), getWidth(), 1);				// creating a diagonal
+	profile = getProfile();
+	
+	CVup = newArray(list.length);							// Coefficient of variation for the diagonal
+	getStatistics(area,mean,min,max,stdDev);
+	CVup[i] = (stdDev)/(mean)*100;
+	run("Plot Profile");
+	saveAs("PNG", output + name + "up");
+	selectWindow(name + "up.png");               			// has to be closed, otherwise next line profile will overwrite the data
+	close();
+
+	selectWindow(list[i]);      
+	makeLine(1, 1, getWidth(), getHeight());				// second diagonal
+	profile = getProfile();
+	CVdown = newArray(list.length);
+	getStatistics(area,mean,min,max,stdDev);
+	CVdown[i] = (stdDev)/(mean)*100;
+
+	run("Plot Profile");
+	saveAs("PNG", output + name + "down");
+
+	selectWindow(list[i]);      							// save illumination image with appropriate LUT
+	run("Spectrum");
+	saveAs("PNG", output + name);
+
+	
+	updateResults();
+
+	if (isOpen("ListaCV") != true) {   						// this line is for the 1st image of a list
+		selectWindow("Results");
+	} else {
+		selectWindow("ListaCV");							// this is for the other images, 'cause the table creation already started
+	}
+	IJ.renameResults("Results");             				// create a table of Results in a table format with CVs values
+	setResult("objective..........", i , list[i]);    		// 1st column
+	setResult("CV_diag_up", i , CVup[i]);                   // 2nd column
+	setResult("CV_diag_down", i , CVdown[i]);				// 3rd column
+	updateResults();
+	selectWindow("Results");
+	IJ.renameResults("ListaCV");
+}
+
+
+function IlluminationProfiles_RGB() {
+					// For datasets taken with a color camera, were images are stored in files with 3 channels
+	run("Split Channels");  								
+	run("Select All");   									
+	run("ROI Manager...");
+	roiManager("Add");
+	selectWindow("C1-" +list[i]);
+	roiManager("Measure");
+	selectWindow("C2-" +list[i]);
+	roiManager("Measure");
+	selectWindow("C3-" +list[i]);
+	roiManager("Measure");
+
+	N = nResults;   										// searchig for channel with highest intensity
+	max_value=0;
+	counter=0;
+	for (a=0; a<nResults(); a++) {
+		if (getResult("Max",a) > max_value) {
+			max_value = getResult("Max",a);
+			counter=a+1; 
+		}
+	}
+	
+	selectWindow("Results");  								
+	run("Close");
+	selectWindow("ROI Manager");
+	roiManager("Delete");
+	selectWindow("ROI Manager");
+	run("Close"); 
+
+	selectWindow("C" + counter +"-" +list[i]);				// we are selecting the channel with the max I
+	run("Median...", "radius=5");							// smooth
+
+	name = replace(list[i],"\\..*","");						// deletes the file extension string in filename
+		
+	makeLine(1, getHeight(), getWidth(), 1);        		
+	profile = getProfile();
+
+
+	CVup = newArray(list.length);							
+	getStatistics(area,mean,min,max,stdDev);
+	CVup[i] = (stdDev)/(mean)*100;
+
+	run("Plot Profile");
+	saveAs("PNG", output + name + "up");
+
+	selectWindow(name + "up.png");
+	close();
+
+	selectWindow("C" + counter +"-" +list[i]);  
+	makeLine(1, 1, getWidth(), getHeight());
+	profile = getProfile();
+
+	CVdown = newArray(list.length);
+	getStatistics(area,mean,min,max,stdDev);
+	CVdown[i] = (stdDev)/(mean)*100;
+
+
+	run("Plot Profile");
+	saveAs("PNG", output + name + "down");
+
+	selectWindow("C" + counter +"-" +list[i]);
+	run("Spectrum");
+	saveAs("PNG", output + name);
+	close();
+	updateResults();
+	
+	if (isOpen("ListaCV") != true) {
+		selectWindow("Results");
+	} else {
+		selectWindow("ListaCV");
+	}
+	IJ.renameResults("Results");
+	setResult("objective..........", i , list[i]);
+	setResult("CV_diag_up", i , CVup[i]);
+	setResult("CV_diag_down", i , CVdown[i]);
+    
+updateResults();
+	selectWindow("Results");
+	IJ.renameResults("ListaCV");
+}
