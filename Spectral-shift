@@ -1,1 +1,122 @@
+/*
+
+ * ______________________________________________Description________________________________________________
+ * Spaceholder
+ * 1) make a profile plot for each channel along of the border of the tetraspeck, 
+ * estimate X-Y alignment by fitting its intensity with a gaussian
+ * 2) ask for running MetroloJ plugin for z alignment report.
+ * _________________________________________________________________________________________________________
+ * 
+ * Author: Aurora Panzera , Light Microscopy Facility, MPI for Developmental Biology
+ * 
+ * 
+ */
+
+// Variables
+getDimensions(width, height, channels, slices, frames);
+colors = newArray("blue","green","red","cyan","magenta","yellow");
+name = getTitle();
+filename = replace(getTitle(),"\\..*","");
+dir = getDirectory("image");
+j=-1;
+getPixelSize(unit, pw, ph, pd);  
+fwhm=newArray(channels);
+Max=newArray(channels);
+RelativeMax=newArray(channels);
+
+
+
+// Select one only Tetraspeck
+waitForUser("Make Selection", "Select a ROI around the tetraspeck \n THEN press OK.");
+	run("Crop");
+
+run("In [+]");
+run("In [+]");
+run("In [+]");
+run("In [+]");
+
+
+// Creation of Profile Plot
+// getting a line profile with gaussian fit for the x-y panel 
+waitForUser("go to z= middle of tetraspeck, then select \n  a line from outside till a bit over max I");
+
+for (i=1; i<=channels; i++) {
+	j=j+1;
+	selectWindow(name);
+	Stack.setChannel(i);
+	profile=getProfile();
+	len=profile.length;
+
+X1=newArray(len);     //collect the x values along the line
+for(l=0;l<len;l++){
+	X1[l]=l*pw;
+}
+//run("Curve Fitting...");
+Fit.doFit("Gaussian", X1, profile);   //make a gaussian fit along the line
+
+ Fit.plot();
+ selectWindow("y = a + (b-a)*exp(-(x-c)*(x-c)/(2*d*d))");
+rename("channel n." + i+ ", color " + colors[j]);
+
+fwhm[j]=2.35*Fit.p(3);
+Max[j]=Fit.p(2);
+RelativeMax[j]=Max[j]-Max[0];
+
+
+//create a table for each channel with the FWHM and the relative position of the max for the gaussian fit
+
+if (isOpen("X-Y_alignment_Report") != true) {   						// this line is for the 1st image of a list
+		//selectWindow("Results");
+	} else {
+		selectWindow("X-Y_alignment_Report");	
+			IJ.renameResults("Results");  // this is for the other images, 'cause the table creation already started
+	}
+      	updateResults();      				// create a table of Results in a table format with the fit values
+	setResult("Channel", j , colors[j]);    		// 1st column
+	setResult("FWHM", j , fwhm[j]);                   // 2nd column
+	setResult("Max position", j , Max[j]);				// 3rd column
+	setResult("Relative shift, um ", j , RelativeMax[j]);
+	updateResults();
+	selectWindow("Results");
+	IJ.renameResults("X-Y_alignment_Report");
+
+
+	if (i<=1) {
+		Plot.create(filename, "Distance (micron)", "Intensity");			// change to "Distance (micron), if line 11 is not active
+		Plot.setColor(colors[j]);
+		Plot.add("line",profile);	
+	} 
+	else {
+		Plot.setColor(colors[j]);
+		Plot.add("line",profile);
+	}
+	}
+
+Plot.update();
+Plot.setLimitsToFit();
+//Plot.makeHighResolution("Line Profile of"+" "+filename, 4.0);
+//selectWindow("Line Profile of"+" "+filename);
+saveAs("png", dir + filename + "_X-Y_Profile");
+
+run("Images to Stack", "name=Stack title=[] use");
+run("Make Montage...", "columns=2 rows=2 scale=1 label");
+saveAs("png", dir + filename + "_X-Y_fit");
+
+//date = "yyyymmdd";              
+//Dialog.create("Informations");
+//Dialog.addString("Input date of measure:", date);
+//Dialog.show();
+//date = Dialog.getString();
+selectWindow("X-Y_alignment_Report");
+saveAs("Results", dir +filename + "_X-Y_alignment_Report.xls");
+close();
+
+
+selectWindow(name);
+
+run("Split Channels");
+
+waitForUser("Make Selection", "Run the Plugin MetroloJ coalignment report");
+//run("Generate co-alignement report", "title_of_report=[] stack_1=C1-Specreg_20xW_series_2.tif stack_2=C2-Specreg_20xW_series_2.tif stack_3=C3-Specreg_20xW_series_2.tif microscope=Confocal wavelength_1=488 wavelength_2=552 wavelength_3=638 na=0.75 pinhole=1 text1=[Sample infos] text2=Comments save save=[L:\\Performance_monitor\\Leica_SP8\\Spec-registration_alignment-Tetraspeck\\20171020_SpecREg tiff-series\\Specreg_20xW_series_2.pdf]");
+
 
