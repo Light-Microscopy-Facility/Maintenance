@@ -1,0 +1,210 @@
+## Make sure zou have al the files of a measurement in a folder. I that folder create a file called steps.txt with intensitz points and a copy of the file POWEREVAL
+
+function powereval(fn,fn_percentages)
+
+#labelpeaks1(filename)
+#
+
+%data=load(fn);
+
+
+f=fopen(fn);
+
+clear y;
+clear x;
+nlines=0;
+
+line=fgetl(f); % read two lines skips first line
+line=fgetl(f);
+while (line!=-1)
+	
+	
+	
+	
+	pos=find(line==9);
+	if length(pos)<2
+		if (length(line)>1) 
+			disp(['Problem: ',line]);
+
+		endif
+	else
+		nlines=nlines+1;
+		s1=line(1:pos(1)-1);
+		
+		
+% the following lines will read the time from the file
+% ============================		
+		pos_space=find(s1==' ');
+		s1=s1(pos_space(1)+1:pos_space(2)-1);
+		
+		pos_doppelpunkt=find(s1==':');
+		pos_punkt=find(s1=='.');
+		hours=str2num(s1(1:pos_doppelpunkt(1)-1));
+		minutes=str2num(s1(pos_doppelpunkt(1)+1:pos_doppelpunkt(2)-1));
+		seconds=str2num(s1(pos_doppelpunkt(2)+1:pos_doppelpunkt(2)+2));
+		milliseconds=str2num(s1(pos_punkt+1:pos_punkt+2))*10;
+		
+		t=milliseconds/1000+(seconds+60*(minutes+60*hours));
+		x(nlines)=t;
+% ============================
+		
+		s2=line(pos(1)+1:pos(2)-1);
+		y(nlines)=str2num(s2);
+	endif
+	
+	line=fgetl(f);
+	
+endwhile
+
+fclose(f);
+
+
+clear percentages;
+if nargin==1
+	disp('The file containing the percentages was not defined');
+	n_steps=input('Number of steps: ');
+	for k=1:n_steps
+		percentages(k)=input(['Step ',num2str(k),': ']);
+	endfor
+else
+	percentages=load(fn_percentages);
+	n_steps=length(percentages);
+endif
+
+l=length(y);
+y_log=log10(y);
+
+if (length(x)==l)
+	x=x-x(1); % start with 0
+else
+	% if something is wrong with x
+	x=[1:l];
+endif
+
+
+xmax=max(x);
+ymax=max(y_log);
+xmin=min(x);
+ymin=min(y_log);
+dist_y=abs(ymax-ymin);
+
+ylabel('log intensity');
+
+lwidth=1;
+lc=[0,0,1];
+
+hold off
+plot(x,y_log,'linewidth',lwidth,'color',lc);
+hold on
+
+xlim([xmin xmax*1.1]);
+ylim([ymin-dist_y*0.2 ymax+dist_y*0.1]);
+
+clear base;
+clear means;
+clear stds;
+
+disp('Select base value by clicking in diagram');
+fflush(stdout);
+
+[x_scale1,y1,b1]=ginput(1);
+[x_scale2,y2,b2]=ginput(1);
+
+x1=0;
+x2=0;
+for k=1:l-1
+	if (x(k)<=x_scale1) && (x(k+1)>x_scale1)
+		x1=k;
+	endif
+	if (x(k)<=x_scale2) && (x(k+1)>x_scale2)
+		x2=k;
+	endif
+endfor
+
+base=mean(y(round(x1):round(x2)) );
+
+y1=log10(base)-dist_y/50;
+y2=log10(base)+dist_y/50;
+plot([x(x1),x(x1)],[y1,y2],'-r');
+plot([x(x2),x(x2)],[y1,y2],'-r');
+
+disp(['Base value: ',num2str(base)]);
+
+disp('Select datapoints by clicking in diagram,'); 
+disp('double click in the area to the right of the diagram to exit');
+
+keep_going=true;
+n=0;
+
+while(keep_going)
+
+	[x_scale1,y1,b1]=ginput(1);
+	[x_scale2,y2,b2]=ginput(1);
+	
+	if (max(x_scale1,x_scale2)>xmax) 	
+		keep_going=false;
+	else
+		n=n+1;
+		
+		x1=0;
+		x2=0;
+		for k=1:l-1
+			if (x(k)<=x_scale1) && (x(k+1)>x_scale1)
+				x1=k;
+			endif
+			if (x(k)<=x_scale2) && (x(k+1)>x_scale2)
+				x2=k;
+			endif
+		endfor
+
+		means(n)=mean(y(round(x1):round(x2)) )-base;
+		stds(n)=std(y(round(x1):round(x2)) );
+		
+		y1=log10(means(n))-dist_y/50;
+		y2=log10(means(n))+dist_y/50;
+		plot([x(x1),x(x1)],[y1,y2],'-r');
+		plot([x(x2),x(x2)],[y1,y2],'-r');
+		
+		if n<=n_steps
+			percentage=num2str(percentages(n));
+		else
+			percentage='-';
+		endif
+		
+		xtext=x_scale1;
+		ytext=ymin-dist_y*.1;
+		text(xtext,ytext,percentage,'color','k','fontsize',16);
+
+		disp(['Step ',num2str(n),': ',num2str(means(n)),' +/- ',num2str(stds(n))]);
+		fflush(stdout);
+		
+	endif
+
+endwhile
+
+
+_tab=char(9);
+_lf=char(10);
+_cr=char(13);
+
+output_ascii='';
+
+for k=1:n
+	
+	if k<=n_steps
+		percentage=num2str(percentages(k));
+	else
+		percentage='-';
+	endif
+	
+	output_ascii=[output_ascii,percentage,_tab,num2str(means(k),10),_tab,num2str(stds(k),10),_cr,_lf];
+	
+endfor
+
+fn_output=['results_',fn];
+
+f=fopen(fn_output,'w');
+fprintf(f,output_ascii);
+fclose(f);
+
+endfunction
