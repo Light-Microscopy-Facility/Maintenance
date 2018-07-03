@@ -1,0 +1,130 @@
+/*
+ * PSF-Analyze.ijm
+ * ______________________________________________Description________________________________________________
+ * A macro to evaluate PSF datasets:
+ * The user has the ability to select a ROI to crop first.
+ * The PSF can subsequently be evaluated and a suitable area can be selected in Orthogonal views for documentation.
+ * A montage of the selection is saved.
+ * _________________________________________________________________________________________________________
+ * 
+ * Author: Aurora Panzera, Pablo Ingino, Light Microscopy Facility, MPI for Developmental Biology
+ */
+
+ 
+// Variables
+filename = getTitle();
+name = replace(getTitle(),"\\..*","");
+dir = getDirectory("image");
+
+// Processing Stack: Croping, Histogram, LUT and make Orthogonal view
+run("Spectrum");
+waitForUser("Make Selection", "Select a ROI around the bead of interest \n THEN press OK. Shift+Click to skip");
+if (isKeyDown("Shift") == true) {
+} else {
+	run("Crop");
+}
+setKeyDown("none");
+run("Spectrum");
+run("Statistics");
+min = getResult("Min", 0);
+max = getResult("Max", 0);
+setMinAndMax(min, max);
+selectWindow("Results");
+run("Close");
+
+run("In [+]");
+run("In [+]");
+run("In [+]");
+run("In [+]");
+
+
+// to reduce the stack to a substak, so to get a zoom around the bead in the PSF profile. It can be skipped
+waitForUser("Make Selection","Do you want a substack? Search \n for starting and ending slice \n THEN press OK. Shift+Click to skip");
+if (isKeyDown("Shift") == true) {
+} else {
+	slicebeg = 1;
+	sliceend = 1;              
+Dialog.create("Which subset of slices?");   //let the user decide the starting and ending slice
+Dialog.addString("First slice:", slicebeg);
+Dialog.addString("Last slice:", sliceend);
+Dialog.show();
+slicebeg = Dialog.getString();
+sliceend = Dialog.getString();
+
+run("Duplicate...", "duplicate range=slicebeg-sliceend use");
+run("Clear Results") ;
+run("Statistics");
+min = getResult("Min", 0);
+max = getResult("Max", 0);
+setMinAndMax(min, max);
+selectWindow("Results");
+run("Close");
+
+  selectWindow(filename);     //close the original stack and save the substack with the old name
+  close();
+rename(filename);
+run("In [+]");
+run("In [+]");
+run("In [+]");
+run("In [+]");
+}
+
+setKeyDown("none");
+run("Orthogonal Views");
+
+//Save the 3 panels of the Orthogonal view in a single multipanel png image and end the program
+waitForUser("Make Selection","Move the cursor where to get PSF \n multipanel image saved THEN press OK");
+list = getList("image.titles");
+selectWindow(list[0]);
+Overlay.remove;
+run("Duplicate...", " ");
+run("Images to Stack", "method=[Copy (center)] name=PSF title=[] use keep");
+getDimensions(width, height, channels, slices, frames);
+sortPSFstack();
+
+
+
+run("Spectrum");
+//run("RGB Color");
+setBackgroundColor(0,0,0);
+run("Make Montage...", "columns=2 rows="+round(slices/2)+" scale=2 border=3 use");
+
+// saving & closing
+
+saveAs("png", dir + name + "_PSF_spectrum");
+//run("3-3-2 RGB");
+//saveAs("png", dir + name + "_PSF_332rgb");
+run("16_colors");
+saveAs("png", dir + name + "_PSF_16colors");
+
+
+run("Close All");
+
+
+
+
+
+// Functions:
+
+// this function is moving the last slice to the beginning, given that the stack has only 3 slices: The XY panel is at the last position of the stack
+function sortPSFstack() {
+	setSlice(slices);
+	metaString = getMetadata("Label");
+	run("Select All");
+	run("Copy");
+	run("Delete Slice");
+	run("Previous Slice [<]");
+	run("Add Slice");
+	run("Paste");
+	run("Select None");
+	setMetadata(metaString);
+	run("Previous Slice [<]");
+	metaString = getMetadata("Label");
+	run("Select All");
+	run("Copy");
+	run("Delete Slice");
+	run("Add Slice");
+	run("Paste");
+	run("Select None");
+	setMetadata(metaString);
+}
